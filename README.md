@@ -1,29 +1,31 @@
+```markdown
 # Task Management System (TMS) Project
 
-## Overview
-The Task Management System (TMS) is a demonstration of a modern DevOps pipeline, showcasing continuous integration, continuous deployment (CI/CD), containerization, and monitoring. The project features a simple Flask-based web application written in Python, automated through a Jenkins CI/CD pipeline, containerized with Docker, and monitored using Prometheus and Grafana. The entire infrastructure is provisioned and configured using Ansible for automation.
+![TMS Architecture](docs/screenshots/architecture.png)
 
-This project is designed to illustrate the full DevOps lifecycle: from code push in a version control system (Gitea) to automated build, test, deployment, and real-time monitoring of the application.
+## Overview
+
+The Task Management System (TMS) is a comprehensive DevOps project demonstrating a full CI/CD pipeline, containerization, and real-time monitoring with alerting. The core application is a Flask-based web service written in Python, automated through a Jenkins CI/CD pipeline, containerized using Docker, and monitored with Prometheus and Grafana. The entire infrastructure is provisioned and managed using Ansible for automation.
+
+This project showcases the end-to-end DevOps lifecycle: from code commits in a version control system to automated build, test, deployment, monitoring, and alerting via Telegram.
 
 ---
 
 ## Architecture
 
-The TMS project consists of the following components, each running on dedicated servers:
+The project is distributed across multiple servers:
 
 1. **Gitea (http://192.168.0.20:3000)**:
-   - Version control system hosting the repository `admin/project-tms` (branch: `main`).
-   - Stores source code (`app.py`, `test_app.py`, `Dockerfile`, `Jenkinsfile`, `requirements.txt`).
+   - Version control system hosting the `admin/project-tms` repository (branch: `main`).
    - Triggers Jenkins builds via webhook on code push.
 
 2. **Jenkins (http://192.168.0.22:8080)**:
-   - CI/CD server managing the pipeline (`Project-TMS-Pipeline`).
-   - Automates linting, testing, building, pushing Docker images, and deploying to production.
-   - Configured with credentials for Gitea, Docker Registry, and SSH access to the app server.
+   - CI/CD server running the `Project-TMS-Pipeline`.
+   - Automates code checkout, linting, testing, building, pushing Docker images, and deployment.
 
 3. **Docker Registry (192.168.0.22:5000)**:
    - Stores the Docker image `project-tms:latest`.
-   - Secured with htpasswd authentication (user: `root`, password: configured via Ansible).
+   - Secured with htpasswd authentication (user: `root`).
 
 4. **Application Server (vm-app, http://192.168.0.24:5000)**:
    - Runs the Flask application in a Docker container.
@@ -33,139 +35,132 @@ The TMS project consists of the following components, each running on dedicated 
    - Managed via `docker-compose.yml` in `/opt/project-tms`.
 
 5. **Monitoring Server (vm-monitor, 192.168.0.25)**:
-   - **Prometheus (http://192.168.0.25:9090)**: Scrapes metrics from `http://192.168.0.24:5000/metrics` every 15 seconds.
-   - **Grafana (http://192.168.0.25:3000)**: Visualizes metrics in dashboards (e.g., request counts, rates).
-   - Configured via `docker-compose.yml` in `/opt/monitoring`.
+   - **Prometheus (http://192.168.0.25:9090)**: Scrapes metrics from the app and Node Exporter.
+   - **Grafana (http://192.168.0.25:3000)**: Visualizes dashboards for request metrics.
+   - **Alertmanager (http://192.168.0.25:9093)**: Sends alerts to Telegram for low disk space.
 
 **Architecture Diagram**:
-```
-[Gitea:192.168.0.20] → (webhook) → [Jenkins:192.168.0.22] → (push) → [Docker Registry:192.168.0.22:5000]
-                                                                 ↓
-                                                             [vm-app:192.168.0.24:5000]
-                                                                 ↓ (metrics)
-                                                             [Prometheus:192.168.0.25:9090] ↔ [Grafana:192.168.0.25:3000]
-```
+
+![Architecture Diagram](docs/screenshots/architecture.png)
 
 ---
 
-## Project Components
+## Components
 
 ### Source Code
-- **app.py**: Flask application with two endpoints:
-  - `/`: Returns an HTML page with a welcome message.
-  - `/metrics`: Exposes Prometheus metrics (e.g., `http_requests_total{endpoint="/"}`).
-- **test_app.py**: Unit tests for the Flask app, verifying endpoints `/` and `/metrics`.
-- **Dockerfile**: Builds the Docker image based on `python:3.9-slim`, installs dependencies, and runs `app.py`.
-- **requirements.txt**: Lists dependencies (`Flask==2.2.5`, `prometheus_client==0.14.1`).
-- **Jenkinsfile**: Defines the CI/CD pipeline with stages: Checkout, Lint, Test, Build, Push, Deploy.
+Located in `src/`:
+- `app.py`: Flask application with `/` (welcome page) and `/metrics` (Prometheus metrics).
+- `test_app.py`: Unit tests verifying the endpoints.
+- `Dockerfile`: Builds the Docker image based on `python:3.9-slim`.
+- `requirements.txt`: Lists dependencies (`Flask==2.2.5`, `prometheus_client==0.14.1`).
+- `Jenkinsfile`: Defines the CI/CD pipeline.
 
 ### CI/CD Pipeline
-The Jenkins pipeline automates the following stages:
-1. **Checkout**: Clones the repository from Gitea (`main` branch).
-2. **Lint**: Runs `flake8` to check code style in a Docker container (`python:3.9-slim`).
+The Jenkins pipeline (`Project-TMS-Pipeline`) automates:
+1. **Checkout**: Clones code from Gitea (`main` branch).
+2. **Lint**: Runs `flake8` for code style checks.
 3. **Test**: Executes unit tests (`unittest`) in a Docker container.
-4. **Build Docker Image**: Builds the Docker image `192.168.0.22:5000/project-tms:latest`.
-5. **Push to Registry**: Pushes the image to the Docker Registry using credentials (`docker-registry-credentials`).
-6. **Deploy to vm-app**: SSH to vm-app (user: `deploy`, credentials: `vm-app-ssh`), pulls the image, and starts the container via `docker-compose`.
+4. **Build Docker Image**: Builds `192.168.0.22:5000/project-tms:latest`.
+5. **Push to Registry**: Pushes the image to the Docker Registry.
+6. **Deploy to vm-app**: Deploys the app via `docker-compose` on `vm-app`.
 
 ### Monitoring
-- **Prometheus**: Configured in `/opt/monitoring/prometheus/prometheus.yml` to scrape metrics from `http://192.168.0.24:5000/metrics`.
-- **Grafana**: Displays dashboards with metrics like `http_requests_total{endpoint="\/"}` and `rate(http_requests_total[5m])`.
+- **Prometheus**: Scrapes metrics from:
+  - `http://192.168.0.24:5000/metrics` (app metrics like `http_requests_total`).
+  - `192.168.0.24:9100` (Node Exporter for system metrics like disk space).
+- **Grafana**: Displays dashboards for request counts and rates (e.g., `rate(http_requests_total{endpoint="\/"}[5m])`).
+- **Alertmanager**: Sends Telegram notifications for alerts.
+
+### Alerting
+The system monitors disk space on `vm-app` (192.168.0.24) using Node Exporter and triggers alerts via Alertmanager:
+- **Alert Rule**: `LowDiskSpace` fires when free disk space on `/` is <20% for 1 minute.
+- **Notification**: Sent to a Telegram group (chat_id: `-4870244448`) with details like:
+  ```
+  Low disk space on 192.168.0.24:9100: 192.168.0.24:9100 has less than 20% free disk space (current: X%).
+  ```
+- **Configuration**:
+  - Prometheus rule in `/opt/monitoring/prometheus/alerts.yml`.
+  - Alertmanager configuration in `/opt/monitoring/alertmanager/alertmanager.yml`.
 
 ### Notifications
-- **Telegram**: Sends build and deployment status to a Telegram group using a bot (configured via Jenkins Telegram Notifications plugin).
-- Notifications include build number, status (SUCCESS/FAILURE), and a link to the Jenkins build.
+- **Telegram**: Sends build status (SUCCESS/FAILURE) and disk space alerts to a Telegram group.
+- Configured via Jenkins (`telegram-bot-token`) and Alertmanager.
 
 ---
 
-## Setup and Configuration
+## Setup
 
-The entire infrastructure is provisioned using **Ansible**. The roles are defined as follows:
+### Prerequisites
+- Ansible, Docker, and docker-compose installed on all servers.
+- Servers:
+  - Gitea: 192.168.0.20
+  - Jenkins/Registry: 192.168.0.22
+  - vm-app: 192.168.0.24
+  - vm-monitor: 192.168.0.25
 
-1. **gitea** (192.168.0.20):
-   - Installs Gitea in a Docker container.
-   - Creates user `admin` and repository `admin/project-tms`.
-   - Configures webhook to trigger Jenkins (`http://192.168.0.22:8080/gitea-webhook/post`).
+### Installation
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/your-username/tms-project.git
+   cd tms-project
+   ```
+2. Update `ansible/inventory.ini` with your server IPs and credentials.
+3. Run Ansible to provision the infrastructure:
+   ```bash
+   ansible-playbook -i ansible/inventory.ini ansible/site.yml
+   ```
 
-2. **jenkins** (192.168.0.22):
-   - Installs Jenkins, Java, Docker, and docker-compose.
-   - Configures plugins (e.g., Gitea, Telegram Notifications).
-   - Sets up credentials: `gitea-credentials-id`, `docker-registry-credentials`, `vm-app-ssh`, `telegram-bot-token`.
-   - Creates pipeline `Project-TMS-Pipeline`.
-
-3. **docker-registry** (192.168.0.22:5000):
-   - Runs Docker Registry in `/opt/docker-registry` with htpasswd authentication.
-   - Configures `insecure-registries` in `/etc/docker/daemon.json`.
-
-4. **vm-app** (192.168.0.24):
-   - Installs Docker and docker-compose.
-   - Deploys `/opt/project-tms/docker-compose.yml` to run the TMS app.
-   - Configures SSH access for user `deploy` and Docker auth for pulling images.
-
-5. **monitoring** (192.168.0.25):
-   - Deploys Prometheus and Grafana in `/opt/monitoring` via docker-compose.
-   - Configures Prometheus to scrape metrics from `192.168.0.24:5000/metrics`.
-
-**Run Ansible**:
-```bash
-ansible-playbook -i inventory.ini site.yml
-```
-
----
-
-## How to Use
-
+### Usage
 1. **Push Code**:
-   - Clone the repository:
-     ```bash
-     git clone http://192.168.0.20:3000/admin/project-tms.git
-     ```
-   - Make changes (e.g., edit `app.py` or `README.md`).
-   - Commit and push:
-     ```bash
-     git add .
-     git commit -m "Update app"
-     git push
-     ```
-
-2. **CI/CD Pipeline**:
-   - Gitea webhook triggers Jenkins (`http://192.168.0.22:8080`).
-   - Pipeline runs: Checkout → Lint → Test → Build → Push → Deploy.
-   - Check build status: `http://192.168.0.22:8080/job/Project-TMS-Pipeline`.
-
+   ```bash
+   cd src
+   git add .
+   git commit -m "Update app"
+   git push
+   ```
+2. **Monitor Pipeline**:
+   - Jenkins: `http://192.168.0.22:8080/job/Project-TMS-Pipeline`.
+   - Telegram: Receive build status notifications.
 3. **Access Application**:
-   - Open `http://192.168.0.24:5000/` for the welcome page.
-   - Open `http://192.168.0.24:5000/metrics` for Prometheus metrics.
-
+   - `http://192.168.0.24:5000/`: Welcome page.
+   - `http://192.168.0.24:5000/metrics`: Metrics.
 4. **Monitor Metrics**:
-   - Prometheus: `http://192.168.0.25:9090` → Status → Targets (check 'tms-app').
-   - Grafana: `http://192.168.0.25:3000` → Dashboards → TMS Metrics (login: admin/<your_password>).
-   - Generate traffic: `curl http://192.168.0.24:5000/` to see metrics update.
-
-5. **Check Notifications**:
-   - Telegram: Build status sent to the configured group (e.g., "Build #N completed with status: SUCCESS").
-   - Email (optional): Configured via Jenkins Email Notification.
-
----
-
-## Verification
-
-To verify the project:
-- **Gitea**: Check webhook delivery in Settings → Webhooks.
-- **Jenkins**: View Build History for `Project-TMS-Pipeline`.
-- **Application**: Access `http://192.168.0.24:5000`.
-- **Monitoring**: Check Prometheus (`http://192.168.0.25:9090/targets`) and Grafana dashboards.
-- **Notifications**: Confirm Telegram messages after builds.
+   - Prometheus: `http://192.168.0.25:9090` (check Targets).
+   - Grafana: `http://192.168.0.25:3000` (login: admin/<password>).
+   - Alerts: Telegram notifications for low disk space (<20%).
+5. **Check Alerts**:
+   - Simulate low disk space:
+     ```bash
+     ssh deploy@192.168.0.24
+     dd if=/dev/zero of=/bigfile bs=1G count=10
+     ```
+   - Receive Telegram alert within 1 minute.
 
 ---
 
-## Future Improvements
-- Add HTTPS for Gitea, Jenkins, Docker Registry, and Grafana using Let’s Encrypt.
-- Implement alerts in Prometheus for high request rates or errors.
-- Add more metrics to `app.py` (e.g., request latency with `Histogram`).
-- Configure backup for Jenkins and monitoring data.
+## Screenshots
+
+| Component       | Screenshot |
+|----------------|------------|
+| Gitea          | ![Gitea](docs/screenshots/gitea.png) |
+| Jenkins        | ![Jenkins](docs/screenshots/jenkins.png) |
+| Application    | ![App](docs/screenshots/app.png) |
+| Prometheus     | ![Prometheus](docs/screenshots/prometheus.png) |
+| Grafana        | ![Grafana](docs/screenshots/grafana.png) |
+| Alertmanager   | ![Alertmanager](docs/screenshots/alertmanager.png) |
+
+---
+
+## QR Code
+
+Scan to view the project on GitHub:
+
+![QR Code](docs/screenshots/qr-code.png)
 
 ---
 
 ## License
-This project is for educational purposes and is not licensed for commercial use.
+
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+```
