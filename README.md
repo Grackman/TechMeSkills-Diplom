@@ -1,7 +1,7 @@
-```markdown
+
 # Task Management System (TMS) Project
 
-![TMS Architecture](docs/screenshots/architecture.png)
+![TMS Architecture](docs/architecture.png)
 
 ## Overview
 
@@ -38,24 +38,6 @@ The project is distributed across multiple servers:
    - **Prometheus (http://192.168.0.25:9090)**: Scrapes metrics from the app and Node Exporter.
    - **Grafana (http://192.168.0.25:3000)**: Visualizes dashboards for request metrics.
    - **Alertmanager (http://192.168.0.25:9093)**: Sends alerts to Telegram for low disk space.
-
-**Architecture Diagram**:
-<<<<<<< HEAD
-
-![Architecture Diagram](docs/screenshots/architecture.png)
-=======
-```
-[Gitea:192.168.0.20] → (webhook) → [Jenkins:192.168.0.22] → (push) → [Docker Registry:192.168.0.22:5000]
-                                                            ↓
-                                                        [vm-app:192.168.0.24:5000]
-                                                            ↓ (metrics)
-                                                        [Prometheus:192.168.0.25:9090] ↔ [Grafana:192.168.0.25:3000]
-                                                            ↓ (alerts)
-                                                        [Alertmanager:192.168.0.25:9093] → [Telegram]
-```
->>>>>>> ff486e6a491976a708ae5bac35b8bd91ddad149a
-
----
 
 ## Components
 
@@ -154,29 +136,11 @@ The system monitors disk space on `vm-app` (192.168.0.24) using Node Exporter an
 
 | Component       | Screenshot |
 |----------------|------------|
-| Gitea          | ![Gitea](docs/screenshots/gitea.png) |
-| Jenkins        | ![Jenkins](docs/screenshots/jenkins.png) |
-| Application    | ![App](docs/screenshots/app.png) |
-| Prometheus     | ![Prometheus](docs/screenshots/prometheus.png) |
-| Grafana        | ![Grafana](docs/screenshots/grafana.png) |
-| Alertmanager   | ![Alertmanager](docs/screenshots/alertmanager.png) |
+| Gitea          | ![Gitea](docs/Gitea.png) |
+| Jenkins        | ![Jenkins](docs/Jenkins.png) |
+| Application    | ![App](docs/app.png) |
+| Prometheus     | ![Prometheus](docs/Prometheus.png) |
+| Grafana        | ![Grafana](docs/Grafana.png) |
+| Alertmanager   | ![Alertmanager](docs/alertmanager.png) |
 
 ---
-
-## QR Code
-
-Scan to view the project on GitHub:
-
-![QR Code](docs/screenshots/qr-code.png)
-
----
-
-## License
-<<<<<<< HEAD
-
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
-
-```
-=======
-This project is for educational purposes and is not licensed for commercial use.
->>>>>>> ff486e6a491976a708ae5bac35b8bd91ddad149a
