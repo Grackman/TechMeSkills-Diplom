@@ -40,10 +40,12 @@ The TMS project consists of the following components, each running on dedicated 
 **Architecture Diagram**:
 ```
 [Gitea:192.168.0.20] → (webhook) → [Jenkins:192.168.0.22] → (push) → [Docker Registry:192.168.0.22:5000]
-                                                                 ↓
-                                                             [vm-app:192.168.0.24:5000]
-                                                                 ↓ (metrics)
-                                                             [Prometheus:192.168.0.25:9090] ↔ [Grafana:192.168.0.25:3000]
+                                                            ↓
+                                                        [vm-app:192.168.0.24:5000]
+                                                            ↓ (metrics)
+                                                        [Prometheus:192.168.0.25:9090] ↔ [Grafana:192.168.0.25:3000]
+                                                            ↓ (alerts)
+                                                        [Alertmanager:192.168.0.25:9093] → [Telegram]
 ```
 
 ---
