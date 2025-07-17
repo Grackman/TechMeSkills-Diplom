@@ -1,0 +1,32 @@
+---
+# tasks file for docker-registry
+- name: Установка Docker
+  apt:
+    name:
+      - docker.io
+      - python3-pip
+    state: present
+    update_cache: yes
+
+- name: Запуск и включение Docker
+  service:
+    name: docker
+    state: started
+    enabled: yes
+
+- name: Установка Docker Registry
+  docker_container:
+    name: registry
+    image: registry:2
+    state: started
+    ports:
+      - "5000:5000"
+    restart_policy: always
+
+- name: Создать htpasswd для Docker Registry
+  shell: docker run --entrypoint htpasswd httpd:2 -Bbn {{ docker_registry_user }} {{ docker_registry_pass }} > /opt/docker-registry/auth/htpasswd
+  args:
+    creates: /opt/docker-registry/auth/htpasswd
+
+- name: Перезапустить Docker Registry
+  shell: docker-compose -f /opt/docker-registry/docker-compose.yml up -d

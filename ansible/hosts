@@ -1,0 +1,16 @@
+[jenkins]
+vm-jenkins ansible_host=192.168.0.22 ansible_user=root ansible_ssh_private_key_file=~/.ssh/id_rsa
+
+[gitea]
+vm-gitea ansible_host=192.168.0.20 ansible_user=root ansible_ssh_private_key_file=~/.ssh/id_rsa
+
+[monitor]
+vm-monitor ansible_host=192.168.0.23 ansible_user=root ansible_ssh_private_key_file=~/.ssh/id_rsa
+
+[app]
+vm-app ansible_host=192.168.0.24 ansible_user=root ansible_ssh_private_key_file=~/.ssh/id_rsa
+
+[all:vars]
+ansible_user=root
+ansible_ssh_private_key_file=~/.ssh/id_rsa
+ansible_ssh_common_args='-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no'

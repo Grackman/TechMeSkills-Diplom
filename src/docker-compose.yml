@@ -1,0 +1,7 @@
+version: '3'
+services:
+  app:
+    image: 192.168.0.22:5000/project-tms:latest
+    ports:
+      - "5000:5000"
+    restart: always

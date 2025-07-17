@@ -1,0 +1,30 @@
+<flow-definition plugin="workflow-job@2.42">
+  <actions/>
+  <description>Pipeline for Project-TMS with Gitea webhook trigger</description>
+  <keepDependencies>false</keepDependencies>
+  <properties/>
+  <definition class="org.jenkinsci.plugins.workflow.cps.CpsScmFlowDefinition" plugin="workflow-cps@2.94">
+    <scm class="hudson.plugins.git.GitSCM" plugin="git@4.8.2">
+      <configVersion>2</configVersion>
+      <userRemoteConfigs>
+        <hudson.plugins.git.UserRemoteConfig>
+          <url>http://192.168.0.20:3000/admin/project-tms.git</url>
+          <credentialsId>gitea-credentials-id</credentialsId>
+        </hudson.plugins.git.UserRemoteConfig>
+      </userRemoteConfigs>
+      <branches>
+        <hudson.plugins.git.BranchSpec>
+          <name>*/main</name>
+        </hudson.plugins.git.BranchSpec>
+      </branches>
+      <doGenerateSubmoduleConfigurations>false</doGenerateSubmoduleConfigurations>
+      <extensions/>
+    </scm>
+    <scriptPath>Jenkinsfile</scriptPath>
+    <lightweight>true</lightweight>
+  </definition>
+  <triggers>
+    <org.jenkinsci.plugins.gitea.GiteaPushTrigger plugin="gitea@1.4.0"/>
+  </triggers>
+  <disabled>false</disabled>
+</flow-definition>

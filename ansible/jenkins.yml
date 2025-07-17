@@ -1,0 +1,7 @@
+---
+- name: Установка и настройка Jenkins сервера
+  hosts: jenkins
+  become: yes
+  roles:
+    - jenkins
+    - docker-registry

@@ -1,0 +1,276 @@
+---
+- name: Установка Java
+  apt:
+    name: openjdk-17-jdk
+    state: present
+    update_cache: yes
+
+- name: Создание пользователя Jenkins
+  user:
+    name: jenkins
+    shell: /bin/bash
+    create_home: yes
+
+- name: Создание нужных директорий
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: jenkins
+    group: jenkins
+    mode: '0755'
+  loop:
+    - /var/lib/jenkins
+    - /var/lib/jenkins/init.groovy.d
+    - /var/lib/jenkins/plugins
+
+- name: Помечаем, что Setup Wizard уже был завершён
+  copy:
+    dest: /var/lib/jenkins/jenkins.install.InstallUtil.lastExecVersion
+    content: "2.516"
+    owner: jenkins
+    group: jenkins
+    mode: '0644'
+
+- name: Помечаем, что Upgrade Wizard тоже пройден
+  copy:
+    dest: /var/lib/jenkins/jenkins.install.UpgradeWizard.state
+    content: "2.516"
+    owner: jenkins
+    group: jenkins
+    mode: '0644'
+
+- name: Копирование init.groovy скрипта безопасности
+  copy:
+    src: basic-security.groovy
+    dest: /var/lib/jenkins/init.groovy.d/basic-security.groovy
+    owner: jenkins
+    group: jenkins
+    mode: '0644'
+
+- name: Копирование архива с плагинами
+  copy:
+    src: jenkins_plugins.tar.gz
+    dest: /var/lib/jenkins/plugins.tar.gz
+    mode: '0644'
+
+- name: Распаковка плагинов в нужную папку
+  unarchive:
+    src: /var/lib/jenkins/plugins.tar.gz
+    dest: /var/lib/jenkins/plugins/
+    remote_src: yes
+    owner: jenkins
+    group: jenkins
+    mode: '0644'
+
+- name: Установка Jenkins (если требуется)
+  apt:
+    name: jenkins
+    state: present
+  when: not jenkins_installed | default(false)
+
+# Новые задачи для установки Docker и настройки прав (добавьте здесь)
+- name: Установка Docker
+  apt:
+    name: docker.io
+    state: present
+    update_cache: yes
+
+- name: Добавление пользователя jenkins в группу docker
+  user:
+    name: jenkins
+    groups: docker
+    append: yes
+
+- name: Запуск и включение Docker
+  service:
+    name: docker
+    state: started
+    enabled: yes
+
+- name: Перезапуск Jenkins после настройки Docker
+  service:
+    name: jenkins
+    state: restarted
+
+- name: Запуск Jenkins
+  service:
+    name: jenkins
+    state: started
+
+- name: Ожидание готовности Jenkins
+  wait_for:
+    host: 192.168.0.22
+    port: 8080
+    state: started
+    timeout: 300
+
+- name: Установка плагинов Jenkins
+  jenkins_plugin:
+    name: "{{ item }}"
+    state: present
+    url: "http://192.168.0.22:8080"
+    url_username: "admin"
+    url_password: "malina130"
+  loop:
+    - credentials-binding
+    - git
+    - gitea  # Добавлен явно для поддержки вебхуков от Gitea
+    - scm-api
+    - workflow-aggregator
+    - workflow-job
+    - workflow-cps
+    - workflow-step-api
+    - workflow-multibranch
+    - pipeline-model-definition
+    - pipeline-stage-view
+    - pipeline-rest-api
+    - pipeline-input-step
+    - credentials
+    - plain-credentials
+    - ssh-credentials
+    - notify-events
+  when: jenkins_plugins_install | default(true)
+
+- name: Установка python3-pip
+  apt:
+    name: python3-pip
+    state: present
+    update_cache: yes
+
+- name: Установка python-jenkins библиотеки
+  pip:
+    name: python-jenkins
+    state: present
+    executable: pip3
+    extra_args: --break-system-packages
+
+- name: Добавление credentials для Gitea (токен доступа)
+  community.general.jenkins_script:
+    script: |
+      import hudson.model.*
+      import jenkins.model.*
+      import com.cloudbees.plugins.credentials.*
+      import com.cloudbees.plugins.credentials.common.*
+      import com.cloudbees.plugins.credentials.domains.*
+      import com.cloudbees.plugins.credentials.impl.*
+      def instance = Jenkins.getInstance()
+      def domain = Domain.global()
+      def store = instance.getExtensionList('com.cloudbees.plugins.credentials.SystemCredentialsProvider')[0].getStore()
+      // Проверка на существование credentials
+      def existingCreds = store.getCredentials(domain).find { it.id == "gitea-credentials-id" }
+      if (!existingCreds) {
+        def credentials = new UsernamePasswordCredentialsImpl(
+          CredentialsScope.GLOBAL,
+          "gitea-credentials-id",
+          "Gitea Access Token",
+          "admin",  # Имя пользователя Gitea
+          "{{ gitea_token }}"  # Токен (пароль)
+        )
+        store.addCredentials(domain, credentials)
+        println("Credentials created successfully")
+      } else {
+        println("Credentials already exist")
+      }
+    url: "http://192.168.0.22:8080"
+    user: "admin"
+    password: "malina130"
+
+- name: Проверка создания credentials (отладка)
+  community.general.jenkins_script:
+    script: |
+      import com.cloudbees.plugins.credentials.*
+      import com.cloudbees.plugins.credentials.domains.*
+      def store = Jenkins.instance.getExtensionList('com.cloudbees.plugins.credentials.SystemCredentialsProvider')[0].getStore()
+      def creds = store.getCredentials(Domain.global()).find { it.id == "gitea-credentials-id" }
+      if (creds) {
+        println("Credentials exist: ID = ${creds.id}, Username = ${creds.username}")
+      } else {
+        println("Credentials not found")
+      }
+    url: "http://192.168.0.22:8080"
+    user: "admin"
+    password: "malina130"
+  register: creds_check  # Сохраняем вывод для просмотра
+
+- name: Добавление Gitea-сервера в конфигурацию Jenkins
+  community.general.jenkins_script:
+    script: |
+      import jenkins.model.Jenkins
+      import org.jenkinsci.plugins.gitea.servers.GiteaServer
+      def instance = Jenkins.instance
+      def descriptor = instance.getDescriptor("org.jenkinsci.plugins.gitea.GiteaPluginConfig")
+      def servers = descriptor.getGiteaServers()
+      // Проверка, существует ли уже сервер
+      if (!servers.any { it.name == "Gitea-Server" }) {
+        def newServer = new GiteaServer("Gitea-Server", "http://192.168.0.20:3000", "gitea-credentials-id", true, true)
+        servers.add(newServer)
+        descriptor.save()
+        println("Gitea server added successfully")
+      } else {
+        println("Gitea server already configured")
+      }
+    url: "http://192.168.0.22:8080"
+    user: "admin"
+    password: "malina130"
+
+- name: Создание пайплайна с триггером от Gitea
+  community.general.jenkins_job:
+    config: "{{ lookup('template', 'pipeline.xml.j2') }}"
+    name: "Project-TMS-Pipeline"
+    url: "http://192.168.0.22:8080"
+    user: "admin"
+    password: "malina130"
+    state: present
+
+- name: Добавление credentials для Docker Registry
+  community.general.jenkins_script:
+    script: |
+      import hudson.model.*
+      import jenkins.model.*
+      import com.cloudbees.plugins.credentials.*
+      import com.cloudbees.plugins.credentials.common.*
+      import com.cloudbees.plugins.credentials.domains.*
+      import com.cloudbees.plugins.credentials.impl.*
+      def instance = Jenkins.getInstance()
+      def domain = Domain.global()
+      def store = instance.getExtensionList('com.cloudbees.plugins.credentials.SystemCredentialsProvider')[0].getStore()
+      // Проверка на существование credentials
+      def existingCreds = store.getCredentials(domain).find { it.id == "docker-registry-credentials" }
+      if (!existingCreds) {
+        def credentials = new UsernamePasswordCredentialsImpl(
+          CredentialsScope.GLOBAL,
+          "docker-registry-credentials",
+          "Docker Registry Credentials",
+          "{{ docker_registry_user }}",  # Имя пользователя Docker Registry, например 'admin'
+          "{{ docker_registry_pass }}"  # Пароль Docker Registry
+        )
+        store.addCredentials(domain, credentials)
+        println("Docker credentials created successfully")
+      } else {
+        println("Docker credentials already exist")
+      }
+    url: "http://192.168.0.22:8080"
+    user: "admin"
+    password: "malina130"
+
+- name: Проверка создания Docker credentials (отладка)
+  community.general.jenkins_script:
+    script: |
+      import com.cloudbees.plugins.credentials.*
+      import com.cloudbees.plugins.credentials.domains.*
+      def store = Jenkins.instance.getExtensionList('com.cloudbees.plugins.credentials.SystemCredentialsProvider')[0].getStore()
+      def creds = store.getCredentials(Domain.global()).find { it.id == "docker-registry-credentials" }
+      if (creds) {
+        println("Docker credentials exist: ID = ${creds.id}, Username = ${creds.username}")
+      } else {
+        println("Docker credentials not found")
+      }
+    url: "http://192.168.0.22:8080"
+    user: "admin"
+    password: "malina130"
+  register: docker_creds_check
+
+- name: Перезапуск Jenkins
+  service:
+    name: jenkins
+    state: restarted

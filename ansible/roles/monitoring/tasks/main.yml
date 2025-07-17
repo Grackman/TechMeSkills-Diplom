@@ -1,0 +1,126 @@
+- name: Установка Docker на сервере мониторинга
+  apt:
+    name: docker.io
+    state: present
+    update_cache: yes
+
+- name: Установка docker-compose
+  get_url:
+    url: https://github.com/docker/compose/releases/download/v2.27.2/docker-compose-linux-x86_64
+    dest: /usr/local/bin/docker-compose
+    mode: '0755'
+
+- name: Создание директории для мониторинга
+  file:
+    path: /opt/monitoring
+    state: directory
+    mode: '0755'
+
+- name: Создание директории для конфигурации Prometheus
+  file:
+    path: /opt/monitoring/prometheus
+    state: directory
+    mode: '0755'
+
+- name: Копирование docker-compose.yml для Prometheus, Grafana и Alertmanager
+  copy:
+    dest: /opt/monitoring/docker-compose.yml
+    content: |
+      version: '3'
+      services:
+        prometheus:
+          image: prom/prometheus:latest
+          restart: always
+          volumes:
+            - /opt/monitoring/prometheus:/etc/prometheus
+            - prometheus-data:/prometheus
+          ports:
+            - "9090:9090"
+        grafana:
+          image: grafana/grafana:latest
+          restart: always
+          volumes:
+            - grafana-data:/var/lib/grafana
+          ports:
+            - "3000:3000"
+          depends_on:
+            - prometheus
+        alertmanager:
+          image: prom/alertmanager:latest
+          restart: always
+          volumes:
+            - /opt/monitoring/alertmanager:/etc/alertmanager
+          ports:
+            - "9093:9093"
+      volumes:
+        prometheus-data:
+        grafana-data:
+        alertmanager-data:
+    mode: '0644'
+
+- name: Создание директории для конфигурации Alertmanager
+  file:
+    path: /opt/monitoring/alertmanager
+    state: directory
+    mode: '0755'
+
+- name: Создание конфигурации Prometheus
+  copy:
+    dest: /opt/monitoring/prometheus/prometheus.yml
+    content: |
+      global:
+        scrape_interval: 15s
+      scrape_configs:
+        - job_name: 'tms-app'
+          static_configs:
+            - targets: ['192.168.0.24:5000']
+          metrics_path: '/metrics'
+        - job_name: 'node-exporter'
+          static_configs:
+            - targets: ['192.168.0.24:9100']
+      rule_files:
+        - 'alerts.yml'
+    mode: '0644'
+
+- name: Создание правил алертов для Prometheus
+  copy:
+    dest: /opt/monitoring/prometheus/alerts.yml
+    content: |
+      groups:
+      - name: disk-space-alerts
+        rules:
+        - alert: LowDiskSpace
+          expr: node_filesystem_free_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"} * 100 < 20
+          for: 15s
+          labels:
+            severity: warning
+          annotations:
+            summary: "Low disk space on {{ '{{' }} $labels.instance {{ '}}' }}"
+            description: "{{ '{{' }} $labels.instance {{ '}}' }} has less than 20% free disk space (current: {{ '{{' }} $value {{ '}}' }}%)."
+    mode: '0644'
+
+- name: Создание конфигурации Alertmanager
+  copy:
+    dest: /opt/monitoring/alertmanager/alertmanager.yml
+    content: |
+      global:
+        resolve_timeout: 5m
+      route:
+        receiver: telegram
+        group_wait: 30s
+        group_interval: 5m
+        repeat_interval: 4h
+      receivers:
+        - name: telegram
+          telegram_configs:
+            - bot_token: "{{ telegram_bot_token }}"
+              chat_id: {{ telegram_chat_id }}
+              parse_mode: ""
+              api_url: "https://api.telegram.org"
+    mode: '0644'
+  vars:
+    telegram_bot_token: "7355445154:AAE-wx1vFZSaaoHXgy71pE2pouBca6Kxwo0"
+    telegram_chat_id: -4870244448
+
+- name: Запуск мониторинга
+  shell: cd /opt/monitoring && docker-compose up -d

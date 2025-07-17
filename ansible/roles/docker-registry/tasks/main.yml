@@ -1,0 +1,67 @@
+---
+# tasks file for docker-registry
+- name: Установка Docker и зависимостей
+  apt:
+    name:
+      - docker.io
+      - python3-pip
+    state: present
+    update_cache: yes
+
+- name: Установка python-docker и docker-compose
+  apt:
+    name:
+      - docker
+      - docker-compose
+    state: present
+
+- name: Запуск и включение Docker
+  service:
+    name: docker
+    state: started
+    enabled: yes
+
+- name: Создать директорию для Docker Registry
+  file:
+    path: /opt/docker-registry/auth
+    state: directory
+    mode: '0755'
+
+- name: Создать htpasswd для Docker Registry
+  shell: docker run --entrypoint htpasswd httpd:2 -Bbn {{ docker_registry_user }} {{ docker_registry_pass }} > /opt/docker-registry/auth/htpasswd
+  args:
+    creates: /opt/docker-registry/auth/htpasswd
+
+- name: Копировать docker-compose.yml для Docker Registry
+  template:
+    src: docker-compose.yml.j2
+    dest: /opt/docker-registry/docker-compose.yml
+    mode: '0644'
+  notify: Restart Docker Registry
+
+- name: Остановить старый Docker Compose (если есть)
+  docker_compose:
+    project_src: /opt/docker-registry
+    state: absent
+  ignore_errors: yes
+
+- name: Принудительно скачать образ Docker Registry
+  docker_image:
+    name: registry
+    tag: "2"
+    source: pull
+
+- name: Запустить Docker Registry с помощью docker-compose
+  docker_compose:
+    project_src: /opt/docker-registry
+    state: present
+    restarted: yes
+  register: compose_result
+
+#  handlers:
+
+- name: Restart Docker Registry
+  docker_compose:
+    project_src: /opt/docker-registry
+    state: present
+    restarted: yes

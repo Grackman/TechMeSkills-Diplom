@@ -1,0 +1,34 @@
+---
+- name: Установка зависимостей для Docker
+  apt:
+    name:
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - gnupg
+      - lsb-release
+    state: present
+    update_cache: yes
+
+- name: Добавление GPG ключа Docker
+  ansible.builtin.apt_key:
+    url: https://download.docker.com/linux/debian/gpg
+    state: present
+
+- name: Добавление Docker репозитория для Debian 12 (bookworm)
+  ansible.builtin.apt_repository:
+    repo: "deb [arch=amd64] https://download.docker.com/linux/debian bookworm stable"
+    state: present
+    filename: docker
+
+- name: Обновление apt-кеша после добавления репозитория
+  apt:
+    update_cache: yes
+
+- name: Установка Docker CE
+  apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+    state: present

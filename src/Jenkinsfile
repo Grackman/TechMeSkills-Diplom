@@ -1,0 +1,64 @@
+pipeline {
+    agent any
+    environment {
+        DOCKER_REGISTRY = '192.168.0.22:5000'
+        IMAGE_NAME = "${DOCKER_REGISTRY}/project-tms:latest"
+        VM_APP_HOST = '192.168.0.24'
+        VM_APP_USER = 'deploy'
+    }
+    stages {
+        stage('Checkout') {
+            steps {
+                git url: 'http://192.168.0.20:3000/admin/project-tms.git', branch: 'main', credentialsId: 'gitea-credentials-id'
+            }
+        }
+        stage('Lint') {
+            steps {
+                sh 'docker run --rm -v $(pwd):/app --workdir /app python:3.9-slim /bin/sh -c "pip install flake8 && flake8 . --max-line-length=120 || true"'
+            }
+        }
+        stage('Test') {
+            steps {
+                sh 'docker run --rm -v $(pwd):/app --workdir /app python:3.9-slim /bin/sh -c "pip install -r requirements.txt && python -m unittest test_app.py"'
+            }
+        }
+        stage('Build Docker Image') {
+            steps {
+                sh 'docker build -t ${IMAGE_NAME} .'
+            }
+        }
+        stage('Push to Registry') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'docker-registry-credentials', usernameVariable: 'REGISTRY_USER', passwordVariable: 'REGISTRY_PASS')]) {
+                    sh """
+                        echo \$REGISTRY_PASS | docker login -u \$REGISTRY_USER --password-stdin ${DOCKER_REGISTRY}
+                        docker push ${IMAGE_NAME}
+                    """
+                }
+            }
+        }
+        stage('Deploy to vm-app') {
+            steps {
+                withCredentials([
+                    sshUserPrivateKey(credentialsId: 'vm-app-ssh', keyFileVariable: 'SSH_KEY', usernameVariable: 'VM_APP_USER'),
+                    usernamePassword(credentialsId: 'docker-registry-credentials', usernameVariable: 'REG_USER', passwordVariable: 'REG_PASS')
+                ]) {
+                    sh """
+                        chmod 600 "$SSH_KEY"
+                        ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no "$VM_APP_USER@$VM_APP_HOST" << EOF
+                        echo "$REG_PASS" | docker login -u "$REG_USER" --password-stdin ${DOCKER_REGISTRY}
+                        cd /opt/project-tms
+                        echo "Останавливаем и удаляем старый контейнер (если есть)..."
+                        docker-compose down || true
+                        echo "Удаляем старый образ..."
+                        docker rmi ${IMAGE_NAME} || true
+                        echo "Пуллим и запускаем новый контейнер..."
+                        docker-compose pull
+                        docker-compose up -d --force-recreate
+EOF
+                    """
+                }
+            }
+        }
+    }
+}

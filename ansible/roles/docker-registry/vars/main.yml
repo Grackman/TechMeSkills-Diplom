@@ -1,0 +1,4 @@
+---
+# vars file for docker-registry
+docker_registry_user: 'root'
+docker_registry_pass: 'malina130'

@@ -1,0 +1,17 @@
+---
+
+#- name: Настройка Jenkins и Docker Registry на vm-ci
+#  hosts: jenkins
+#  roles:
+#    - jenkins
+#    - docker-registry
+
+- name: Настройка приложения на vm-app
+  hosts: vm-app
+  roles:
+    - app
+    - node-exporter
+- name: Настройка мониторинга и логирования на vm-observe
+  hosts: vm-monitor
+  roles:
+    - monitoring

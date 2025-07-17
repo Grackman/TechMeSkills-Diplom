@@ -1,0 +1,26 @@
+- name: Копируем скрипт автоматической настройки Jenkins
+  copy:
+    src: configure-jenkins.groovy
+    dest: /var/lib/jenkins/init.groovy.d/configure-jenkins.groovy
+    owner: jenkins
+    group: jenkins
+    mode: '0644'
+
+- name: Устанавливаем нужные плагины
+  shell: |
+    JENKINS_CLI="/usr/share/jenkins/jenkins-cli.jar"
+    URL="http://localhost:8080"
+    sleep 10
+    curl -s -o $JENKINS_CLI $URL/jnlpJars/jenkins-cli.jar
+    for plugin in git git-client gitea pipeline workflow-aggregator; do
+      java -jar $JENKINS_CLI -s $URL install-plugin $plugin -deploy
+    done
+  args:
+    executable: /bin/bash
+  register: plugin_install
+  changed_when: "'Successfully installed' in plugin_install.stdout"
+
+- name: Перезапуск Jenkins после установки плагинов
+  service:
+    name: jenkins
+    state: restarted

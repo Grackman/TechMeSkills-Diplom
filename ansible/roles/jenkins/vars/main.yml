@@ -1,0 +1,6 @@
+---
+# vars file for jenkins
+
+gitea_token: "0570bbe7bbe6ae2f901be6e9496283d128237a94"
+docker_registry_user: 'admin'
+docker_registry_pass: 'malina130'
