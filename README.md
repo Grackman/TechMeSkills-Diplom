@@ -95,7 +95,7 @@ The system monitors disk space on `vm-app` (192.168.0.24) using Node Exporter an
 ### Installation
 1. Clone the repository:
    ```bash
-   git clone https://github.com/your-username/tms-project.git
+   git clone https://github.com/Grackman/tms-project.git
    cd tms-project
    ```
 2. Update `ansible/inventory.ini` with your server IPs and credentials.
